@@ -345,6 +345,42 @@ describe("oracle utility helpers", () => {
     },
   );
 
+  testNonWindows(
+    "readFiles measures each file from the root of an input that matched it",
+    async () => {
+      const dir = await mkdtemp(path.join(os.tmpdir(), "oracle-readfiles-root-attribution-"));
+      try {
+        await mkdir(path.join(dir, "build", "pack"), { recursive: true });
+        await writeFile(path.join(dir, "kept.md"), "kept", "utf8");
+        await writeFile(path.join(dir, "build", "notes.md"), "notes", "utf8");
+        await writeFile(path.join(dir, "build", "tool.ts"), "tool", "utf8");
+        await writeFile(path.join(dir, "build", "pack", "a.md"), "a", "utf8");
+
+        const { vi } = await import("vitest");
+        const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+        const names = async (inputs: string[]) =>
+          (await readFiles(inputs, { cwd: dir, readContents: false }))
+            .map((file) => path.relative(dir, file.path))
+            .sort();
+        try {
+          // A deeper glob that matches nothing must not change what the broad glob selects.
+          expect(await names(["**/*.md", "build/*.NO_MATCH"])).toEqual(["kept.md"]);
+          // A deeper glob keeps its own match without admitting other files under build/.
+          expect(await names(["**/*.md", "build/*.ts"])).toEqual(["build/tool.ts", "kept.md"]);
+          // Brace alternatives get their own roots, like separate inputs.
+          expect(await names(["{*.md,build/pack/*.md}"])).toEqual(
+            await names(["*.md", "build/pack/*.md"]),
+          );
+          expect(await names(["*.md", "build/pack/*.md"])).toEqual(["build/pack/a.md", "kept.md"]);
+        } finally {
+          logSpy.mockRestore();
+        }
+      } finally {
+        await rm(dir, { recursive: true, force: true });
+      }
+    },
+  );
+
   testNonWindows("readFiles logs and skips default-ignored dirs under project roots", async () => {
     const dir = await mkdtemp(path.join(os.tmpdir(), "oracle-readfiles-ignore-logs-"));
     const ignoredDirs = ["node_modules", "dist", "coverage"];
