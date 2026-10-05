@@ -274,6 +274,39 @@ describe("oracle utility helpers", () => {
     }
   });
 
+  testNonWindows(
+    "readFiles ignores default-ignored ancestors above the requested directory or glob",
+    async () => {
+      const dir = await mkdtemp(path.join(os.tmpdir(), "oracle-readfiles-ignored-ancestor-"));
+      try {
+        const pack = path.join(dir, "build", "pack");
+        const cwd = path.join(dir, "work");
+        await mkdir(path.join(pack, "node_modules"), { recursive: true });
+        await mkdir(cwd, { recursive: true });
+        await writeFile(path.join(pack, "a.md"), "alpha", "utf8");
+        await writeFile(path.join(pack, "b.md"), "beta", "utf8");
+        await writeFile(path.join(pack, "node_modules", "dep.md"), "dep", "utf8");
+
+        const { vi } = await import("vitest");
+        const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+        try {
+          for (const input of [pack, path.join(pack, "**/*.md")]) {
+            const files = await readFiles([input], { cwd });
+            const basenames = files.map((file) => path.basename(file.path)).sort();
+            expect(basenames).toEqual(["a.md", "b.md"]);
+          }
+          const logged = logSpy.mock.calls.flat().map((arg) => String(arg ?? ""));
+          expect(logged.some((line) => line.includes("(matches build)"))).toBe(false);
+          expect(logged.some((line) => line.includes("(matches node_modules)"))).toBe(true);
+        } finally {
+          logSpy.mockRestore();
+        }
+      } finally {
+        await rm(dir, { recursive: true, force: true });
+      }
+    },
+  );
+
   testNonWindows("readFiles logs and skips default-ignored dirs under project roots", async () => {
     const dir = await mkdtemp(path.join(os.tmpdir(), "oracle-readfiles-ignore-logs-"));
     const ignoredDirs = ["node_modules", "dist", "coverage"];

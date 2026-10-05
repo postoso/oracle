@@ -67,15 +67,15 @@ export async function readFiles(
     .map((dir) => path.resolve(dir))
     .filter((dir) => DEFAULT_IGNORED_DIRS.has(path.basename(dir)));
   const allowedLiteralFiles = partitioned.literalFiles.map((file) => path.resolve(file));
-  const resolvedLiteralDirs = new Set(allowedLiteralDirs);
   const allowedPaths = new Set([...allowedLiteralDirs, ...allowedLiteralFiles]);
+  const expansionRoots = getExpansionRoots(partitioned, cwd);
   const ignoredWhitelist = await buildIgnoredWhitelist(candidatePaths, cwd, fsModule);
   const ignoredLog = new Set<string>();
   const filteredCandidates = candidatePaths.filter((filePath) => {
     const ignoredDir = findIgnoredAncestor(
       filePath,
       cwd,
-      resolvedLiteralDirs,
+      expansionRoots,
       allowedPaths,
       ignoredWhitelist,
     );
@@ -193,6 +193,25 @@ async function partitionFileInputs(
   return result;
 }
 
+// Absolute paths each --file input expands from: literal files and directories as given,
+// plus the static base of every glob (e.g. `/tmp/pack` for `/tmp/pack/**/*.md`).
+function getExpansionRoots(partitioned: PartitionedFiles, cwd: string): string[] {
+  const globBases = partitioned.globPatterns.flatMap((pattern) =>
+    fg.generateTasks(pattern).map((task) => path.resolve(cwd, task.base)),
+  );
+  return Array.from(
+    new Set([...partitioned.literalFiles, ...partitioned.literalDirectories, ...globBases]),
+  );
+}
+
+function isWithin(target: string, root: string): boolean {
+  const relative = path.relative(root, target);
+  return (
+    relative === "" ||
+    (relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative))
+  );
+}
+
 async function expandWithNativeGlob(partitioned: PartitionedFiles, cwd: string): Promise<string[]> {
   const patterns = [
     ...partitioned.globPatterns,
@@ -305,7 +324,7 @@ async function buildIgnoredWhitelist(
 function findIgnoredAncestor(
   filePath: string,
   cwd: string,
-  _literalDirs: Set<string>,
+  expansionRoots: string[],
   allowedPaths: Set<string>,
   ignoredWhitelist: Set<string>,
 ): string | null {
@@ -317,14 +336,21 @@ function findIgnoredAncestor(
   ) {
     return null; // explicitly requested path overrides default ignore when the ignored dir itself was passed
   }
-  const rel = path.relative(cwd, absolute);
+  // Only segments below the requested directory or glob base count, so an ancestor such as
+  // /tmp in `--file /tmp/pack` does not hide the files the user asked for. With overlapping
+  // inputs, the deepest root containing the file wins.
+  const root =
+    expansionRoots
+      .filter((candidate) => isWithin(absolute, candidate))
+      .sort((a, b) => b.length - a.length)[0] ?? cwd;
+  const rel = path.relative(root, absolute);
   const parts = rel.split(path.sep);
   for (let idx = 0; idx < parts.length; idx += 1) {
     const part = parts[idx];
     if (!DEFAULT_IGNORED_DIRS.has(part)) {
       continue;
     }
-    const ignoredDir = path.resolve(cwd, parts.slice(0, idx + 1).join(path.sep));
+    const ignoredDir = path.resolve(root, parts.slice(0, idx + 1).join(path.sep));
     if (ignoredWhitelist.has(ignoredDir)) {
       continue;
     }
