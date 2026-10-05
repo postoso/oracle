@@ -307,6 +307,44 @@ describe("oracle utility helpers", () => {
     },
   );
 
+  testNonWindows(
+    "readFiles resolves overlapping roots and whitelisted ignored dirs from the requested root",
+    async () => {
+      const dir = await mkdtemp(path.join(os.tmpdir(), "oracle-readfiles-root-edges-"));
+      try {
+        const dist = path.join(dir, "dist");
+        await mkdir(path.join(dist, "sub"), { recursive: true });
+        await writeFile(path.join(dist, ".gitignore"), "*.map\n", "utf8");
+        await writeFile(path.join(dist, "a.ts"), "a", "utf8");
+        await writeFile(path.join(dist, "sub", "b.ts"), "b", "utf8");
+        const pack = path.join(dir, "build", "pack");
+        await mkdir(pack, { recursive: true });
+        await mkdir(path.join(dir, "a-much-longer-sibling-name"), { recursive: true });
+        await writeFile(path.join(pack, "c.md"), "c", "utf8");
+
+        const { vi } = await import("vitest");
+        const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+        try {
+          // dist/ has its own .gitignore, so it stays whitelisted when the root sits above cwd.
+          const fromDist = await readFiles(["../.."], { cwd: path.join(dist, "sub") });
+          const distNames = fromDist.map((file) => path.basename(file.path));
+          expect(distNames).toEqual(expect.arrayContaining(["a.ts", "b.ts"]));
+
+          // A root spelled with `..` must not outrank the deeper root that holds the file.
+          const overlapping = await readFiles(
+            [`${path.join(dir, "a-much-longer-sibling-name")}${path.sep}..${path.sep}`, pack],
+            { cwd: path.join(dist, "sub") },
+          );
+          expect(overlapping.map((file) => path.basename(file.path))).toContain("c.md");
+        } finally {
+          logSpy.mockRestore();
+        }
+      } finally {
+        await rm(dir, { recursive: true, force: true });
+      }
+    },
+  );
+
   testNonWindows("readFiles logs and skips default-ignored dirs under project roots", async () => {
     const dir = await mkdtemp(path.join(os.tmpdir(), "oracle-readfiles-ignore-logs-"));
     const ignoredDirs = ["node_modules", "dist", "coverage"];

@@ -69,7 +69,12 @@ export async function readFiles(
   const allowedLiteralFiles = partitioned.literalFiles.map((file) => path.resolve(file));
   const allowedPaths = new Set([...allowedLiteralDirs, ...allowedLiteralFiles]);
   const expansionRoots = getExpansionRoots(partitioned, cwd);
-  const ignoredWhitelist = await buildIgnoredWhitelist(candidatePaths, cwd, fsModule);
+  const ignoredWhitelist = await buildIgnoredWhitelist(
+    candidatePaths,
+    cwd,
+    expansionRoots,
+    fsModule,
+  );
   const ignoredLog = new Set<string>();
   const filteredCandidates = candidatePaths.filter((filePath) => {
     const ignoredDir = findIgnoredAncestor(
@@ -199,8 +204,20 @@ function getExpansionRoots(partitioned: PartitionedFiles, cwd: string): string[]
   const globBases = partitioned.globPatterns.flatMap((pattern) =>
     fg.generateTasks(pattern).map((task) => path.resolve(cwd, task.base)),
   );
-  return Array.from(
-    new Set([...partitioned.literalFiles, ...partitioned.literalDirectories, ...globBases]),
+  const literals = [...partitioned.literalFiles, ...partitioned.literalDirectories].map((entry) =>
+    path.resolve(entry),
+  );
+  return Array.from(new Set([...literals, ...globBases]));
+}
+
+// Default ignores count only below the requested directory or glob base, so an ancestor such
+// as /tmp in `--file /tmp/pack` does not hide the files the user asked for. With overlapping
+// inputs, the deepest root containing the file wins.
+function findExpansionRoot(absolutePath: string, expansionRoots: string[], cwd: string): string {
+  return (
+    expansionRoots
+      .filter((root) => isWithin(absolutePath, root))
+      .sort((a, b) => b.length - a.length)[0] ?? cwd
   );
 }
 
@@ -292,19 +309,21 @@ function isGitignored(filePath: string, sets: GitignoreSet[]): boolean {
 async function buildIgnoredWhitelist(
   filePaths: string[],
   cwd: string,
+  expansionRoots: string[],
   fsModule: MinimalFsModule,
 ): Promise<Set<string>> {
   const whitelist = new Set<string>();
   for (const filePath of filePaths) {
     const absolute = path.resolve(filePath);
-    const rel = path.relative(cwd, absolute);
+    const root = findExpansionRoot(absolute, expansionRoots, cwd);
+    const rel = path.relative(root, absolute);
     const parts = rel.split(path.sep).filter(Boolean);
     for (let i = 0; i < parts.length - 1; i += 1) {
       const part = parts[i];
       if (!DEFAULT_IGNORED_DIRS.has(part)) {
         continue;
       }
-      const dirPath = path.resolve(cwd, ...parts.slice(0, i + 1));
+      const dirPath = path.resolve(root, ...parts.slice(0, i + 1));
       if (whitelist.has(dirPath)) {
         continue;
       }
@@ -336,13 +355,7 @@ function findIgnoredAncestor(
   ) {
     return null; // explicitly requested path overrides default ignore when the ignored dir itself was passed
   }
-  // Only segments below the requested directory or glob base count, so an ancestor such as
-  // /tmp in `--file /tmp/pack` does not hide the files the user asked for. With overlapping
-  // inputs, the deepest root containing the file wins.
-  const root =
-    expansionRoots
-      .filter((candidate) => isWithin(absolute, candidate))
-      .sort((a, b) => b.length - a.length)[0] ?? cwd;
+  const root = findExpansionRoot(absolute, expansionRoots, cwd);
   const rel = path.relative(root, absolute);
   const parts = rel.split(path.sep);
   for (let idx = 0; idx < parts.length; idx += 1) {
