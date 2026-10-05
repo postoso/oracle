@@ -210,17 +210,6 @@ function getExpansionRoots(partitioned: PartitionedFiles, cwd: string): string[]
   return Array.from(new Set([...literals, ...globBases]));
 }
 
-// Default ignores count only below the requested directory or glob base, so an ancestor such
-// as /tmp in `--file /tmp/pack` does not hide the files the user asked for. With overlapping
-// inputs, the deepest root containing the file wins.
-function findExpansionRoot(absolutePath: string, expansionRoots: string[], cwd: string): string {
-  return (
-    expansionRoots
-      .filter((root) => isWithin(absolutePath, root))
-      .sort((a, b) => b.length - a.length)[0] ?? cwd
-  );
-}
-
 function isWithin(target: string, root: string): boolean {
   const relative = path.relative(root, target);
   return (
@@ -338,6 +327,17 @@ async function buildIgnoredWhitelist(
     }
   }
   return whitelist;
+}
+
+// Default ignores count only below the requested directory or glob base, so an ancestor such
+// as /tmp in `--file /tmp/pack` does not hide the files the user asked for. With overlapping
+// inputs, the deepest root containing the file wins.
+function findExpansionRoot(absolutePath: string, expansionRoots: string[], cwd: string): string {
+  return (
+    expansionRoots
+      .filter((root) => isWithin(absolutePath, root))
+      .sort((a, b) => b.length - a.length)[0] ?? cwd
+  );
 }
 
 function findIgnoredAncestor(
