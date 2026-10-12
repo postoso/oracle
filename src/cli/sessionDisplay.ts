@@ -217,7 +217,7 @@ export async function showStatus({
     const sessionsDir = sessionStore.sessionsDir();
     console.log(
       chalk.yellow(
-        `Showing ${entries.length} of ${total} sessions from the requested range. Run "oracle session --clear" or delete entries in ${sessionsDir} to free space, or rerun with --status-limit/--status-all.`,
+        `Showing ${entries.length} of ${total} sessions from the requested range. Run "oracle session --clear" or delete entries in ${sessionsDir} to free space, or rerun "oracle status" with a higher --limit <count> (maximum 1000); add --all to include older sessions.`,
       ),
     );
   }

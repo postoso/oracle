@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- CLI: point the truncated `oracle status` hint at a higher `oracle status --limit <count>`, with `--all` for older sessions; it suggested `--status-limit` and `--status-all`, which do not exist; thanks @postoso.
+
 ## 0.21.5 - 2026-10-11
 
 **Highlights:** Reliable Chrome recovery and cleanup, faster file bundles, and the source-map-js security fix (CVE-2026-93749).
