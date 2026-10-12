@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- CLI: keep `oracle status` and `oracle session` newest-first when a stored session has no valid `createdAt`, falling back to `startedAt` or `completedAt` and listing sessions with no timestamp last, instead of leaving the whole list partially unsorted; thanks @postoso.
+
 ## 0.21.5 - 2026-10-11
 
 **Highlights:** Reliable Chrome recovery and cleanup, faster file bundles, and the source-map-js security fix (CVE-2026-93749).
