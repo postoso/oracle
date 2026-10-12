@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- CLI: list `--browser-thinking-time`, `--browser-attachment-timeout`, `--browser-max-concurrent-tabs`, `--browser-manual-login-profile-dir`, the cookie allowlist and inline-cookie flags, and `--browser-allow-cookie-errors` in `oracle --help --verbose`, and test that every other hidden root option is either listed there or is an alias, deprecated, or internal flag; thanks @postoso.
+
 ## 0.21.5 - 2026-10-11
 
 **Highlights:** Reliable Chrome recovery and cleanup, faster file bundles, and the source-map-js security fix (CVE-2026-93749).
