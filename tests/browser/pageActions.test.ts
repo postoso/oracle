@@ -187,6 +187,22 @@ describe("navigateToChatGPT", () => {
     );
   });
 
+  test("fails with a next step when both navigations report an error", async () => {
+    const tab = fakeTab([
+      {
+        errorText: "net::ERR_NAME_NOT_RESOLVED",
+        readyState: "complete",
+        href: "chrome-error://chromewebdata/",
+      },
+    ]);
+    const outcome = await navigateWithFakeTimers(tab, "https://chatgpt.com/?state=SENTINEL");
+    expect(outcome).toBeInstanceOf(BrowserAutomationError);
+    expect((outcome as Error).message).toBe(
+      "Page did not load (navigation failed: net::ERR_NAME_NOT_RESOLVED), including one navigation retry. Check that https://chatgpt.com/ opens in that Chrome window, then rerun.",
+    );
+    expect(tab.navigate).toHaveBeenCalledTimes(2);
+  });
+
   test("retries once when the document stays loading", async () => {
     const tab = fakeTab([
       { readyState: "loading", href: "https://chatgpt.com/" },
@@ -201,7 +217,7 @@ describe("navigateToChatGPT", () => {
     const outcome = await navigateWithFakeTimers(tab, "https://chatgpt.com/");
     expect(outcome).toBeInstanceOf(BrowserAutomationError);
     expect((outcome as Error).message).toMatch(
-      /Page did not reach ready state in time \(readyState=complete, url=about:blank\), including one navigation retry/,
+      /Page did not reach ready state in time \(readyState=complete, url=about:blank\), including one navigation retry\. Check that https:\/\/chatgpt\.com\/ opens in that Chrome window, then rerun\.$/,
     );
     expect(tab.navigate).toHaveBeenCalledTimes(2);
   });

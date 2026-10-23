@@ -75,10 +75,11 @@ export async function navigateToChatGPT(
     logger("[browser] Page loaded on navigation retry.");
     return;
   }
+  const nextStep = `Check that ${formatDiagnosticUrl(url)} opens in that Chrome window, then rerun.`;
   throw new BrowserAutomationError(
     retry.timedOut
-      ? `Page did not reach ready state in time (${retry.reason}), including one navigation retry.`
-      : `Page did not load (${retry.reason}), including one navigation retry.`,
+      ? `Page did not reach ready state in time (${retry.reason}), including one navigation retry. ${nextStep}`
+      : `Page did not load (${retry.reason}), including one navigation retry. ${nextStep}`,
     { stage: "navigation", details: { url: formatDiagnosticUrl(url), reason: retry.reason } },
   );
 }
